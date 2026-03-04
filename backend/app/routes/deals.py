@@ -6,6 +6,7 @@ from ..scraper.lidl import scrape_all_categories
 from ..scraper.lidl_leaflet import parse_leaflet
 from ..db import save_deals, get_deals, get_categories
 from ..export import generate_deals_pdf
+from ..email_report import send_deals_email
 
 deals_bp = Blueprint("deals", __name__)
 
@@ -60,3 +61,15 @@ def export_pdf():
         mimetype="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@deals_bp.route("/api/deals/export/email", methods=["POST"])
+def email_pdf():
+    category = request.args.get("category")
+    deals = get_deals(current_app, category or None)
+    pdf_bytes = generate_deals_pdf(deals)
+    try:
+        send_deals_email(pdf_bytes, category)
+        return jsonify({"sent": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

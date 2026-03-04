@@ -32,7 +32,8 @@ main {
 }
 
 #scrape-btn,
-#leaflet-btn {
+#leaflet-btn,
+#email-btn {
     border: none;
     padding: 0.6rem 1.2rem;
     border-radius: 6px;
@@ -47,16 +48,19 @@ main {
     color: white;
 }
 
-#leaflet-btn {
+#leaflet-btn,
+#email-btn {
     background: #fff;
     color: #333;
     border: 1px solid #ddd;
 }
 
 #scrape-btn:hover:not(:disabled) { background: #c1121f; }
-#leaflet-btn:hover:not(:disabled) { background: #f0f0f0; }
+#leaflet-btn:hover:not(:disabled),
+#email-btn:hover:not(:disabled) { background: #f0f0f0; }
 #scrape-btn:disabled,
-#leaflet-btn:disabled { background: #aaa; color: #fff; border-color: #aaa; cursor: not-allowed; }
+#leaflet-btn:disabled,
+#email-btn:disabled { background: #aaa; color: #fff; border-color: #aaa; cursor: not-allowed; }
 
 .toolbar-link {
     display: inline-block;

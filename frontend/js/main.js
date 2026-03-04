@@ -17,6 +17,9 @@ function renderToolbar(loading = false, currentCategory = null) {
             <a id="export-btn" class="toolbar-link" href="${exportUrl}" download>
                 Download PDF
             </a>
+            <button id="email-btn" ${loading ? "disabled" : ""}>
+                Email PDF
+            </button>
             <div id="category-filter" class="filter-bar"></div>
         </div>
     `;
@@ -103,6 +106,7 @@ async function init() {
         if (!loading) {
             wireScrapeButton();
             wireLeafletButton();
+            wireEmailButton();
             renderCategoryFilter();
         }
     }
@@ -144,6 +148,26 @@ async function init() {
                 alert(`Scrape failed: ${err.message}`);
             }
             render();
+        });
+    }
+
+    function wireEmailButton() {
+        const btn = document.getElementById("email-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            btn.textContent = "Sending…";
+            const path = currentCategory
+                ? `/deals/export/email?category=${encodeURIComponent(currentCategory)}`
+                : "/deals/export/email";
+            try {
+                await apiFetch(path, { method: "POST" });
+                alert("Report sent to jgawry@gmail.com");
+            } catch (err) {
+                alert(`Email failed: ${err.message}`);
+            }
+            btn.disabled = false;
+            btn.textContent = "Email PDF";
         });
     }
 
