@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+backend/venv/
+venv/
+.venv/
+
+# Database
+backend/instance/
+
+# Environment secrets
+.env
+!.env.example
+
+# Dev scratch files
+resources/*.pdf
+resources/*.html
+resources/*_files/
+resources/*.json
+
+# Claude internal
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
