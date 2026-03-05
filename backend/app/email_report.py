@@ -4,6 +4,14 @@ import smtplib
 from datetime import datetime
 from email.message import EmailMessage
 
+try:
+    import keyring as _keyring
+except ImportError:
+    _keyring = None
+
+_KEYRING_SERVICE = "food-chaser"
+_KEYRING_USER    = "smtp"
+
 
 _RECIPIENTS = "jgawry@gmail.com, kgawry@gmail.com"
 
@@ -108,8 +116,15 @@ def send_deals_email(pdf_bytes: bytes, category: str = None) -> None:
     user = os.environ.get("SMTP_USER", "")
     password = os.environ.get("SMTP_PASS", "")
 
+    # Prefer credential vault over .env
+    if not password and _keyring is not None:
+        password = _keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER) or ""
+
     if not user or not password:
-        raise RuntimeError("SMTP_USER and SMTP_PASS must be set in .env")
+        raise RuntimeError(
+            "SMTP credentials not found. Run `python store_credentials.py` "
+            "or set SMTP_USER / SMTP_PASS in .env"
+        )
 
     date_str = datetime.now().strftime("%d %b %Y")
     subject = f"Food Chaser Report: {date_str}"
