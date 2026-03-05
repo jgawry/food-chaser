@@ -482,3 +482,13 @@ def parse_leaflet(pdf_path: str, store: str = 'Lidl') -> list[dict]:
         })
 
     return deals
+
+
+from .base import LeafletScraper
+
+
+class LidlLeafletScraper(LeafletScraper):
+    store_name = 'Lidl'
+
+    def parse_leaflet(self, pdf_path: str) -> list[dict]:
+        return parse_leaflet(pdf_path, store=self.store_name)

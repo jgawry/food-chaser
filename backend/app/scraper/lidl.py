@@ -176,3 +176,13 @@ def scrape_all_categories() -> list:
             logger.error("Failed to scrape category '%s': %s", cat["label"], e)
 
     return all_products
+
+
+from .base import WebScraper
+
+
+class LidlWebScraper(WebScraper):
+    store_name = 'Lidl'
+
+    def scrape(self) -> list[dict]:
+        return scrape_all_categories()

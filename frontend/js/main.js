@@ -86,10 +86,10 @@ async function triggerScrape() {
     return apiFetch("/scrape", { method: "POST" });
 }
 
-async function triggerLeafletScrape(pdfPath) {
+async function triggerLeafletScrape(pdfPath, store) {
     return apiFetch("/scrape/leaflet", {
         method: "POST",
-        body: JSON.stringify({ pdf_path: pdfPath }),
+        body: JSON.stringify({ pdf_path: pdfPath, store }),
     });
 }
 
@@ -177,9 +177,11 @@ async function init() {
         btn.addEventListener("click", async () => {
             const pdfPath = prompt("Enter the full path to the leaflet PDF:");
             if (!pdfPath) return;
+            const store = prompt("Store name (e.g. lidl, makro):", "lidl");
+            if (!store) return;
             render(true);
             try {
-                const result = await triggerLeafletScrape(pdfPath.trim());
+                const result = await triggerLeafletScrape(pdfPath.trim(), store.trim().toLowerCase());
                 deals = await fetchDeals(currentCategory);
                 alert(`Imported ${result.parsed} deals from the leaflet.`);
             } catch (err) {

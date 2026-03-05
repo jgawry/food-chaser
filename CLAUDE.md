@@ -18,9 +18,35 @@ A grocery store leaflet scraper that finds the best deals on items of interest. 
 - No JS framework — keep it vanilla
 - Use `python-dotenv` for all config/secrets via `.env` (see `.env.example`)
 
+## Features
+
+### Lidl Web Scraper
+- Scrapes Lidl food category pages (`/h/{slug}/{id}`, `/c/{slug}/{id}`)
+- Parses `<script id="__NUXT_DATA__">` flat JSON array for product/price data
+- POST `/api/scrape` triggers scrape and saves to SQLite DB
+
+### PDF Leaflet Scraper (`backend/app/scraper/lidl_leaflet.py`)
+- Parses Lidl promotional leaflet PDFs using `pymupdf`
+- Extracts brand, name, qty, price, old price, discount %, promo labels
+- Handles two deal types: regular deals and app-coupon ("N+M gratis") deals
+- Filters OCR noise using Polish-text patterns
+- POST `/api/scrape/leaflet` — body: `{"pdf_path": "/absolute/path/to/leaflet.pdf"}`
+
+### PDF Export (`backend/app/export.py`)
+- Generates styled A4 PDF report via `reportlab`, grouped by category
+- GET `/api/deals/export/pdf?category=X` — downloads PDF
+
+### Email Reports (`backend/app/email_report.py`)
+- Sends deal report as HTML email with PDF attachment via SMTP (Gmail/SSL port 465)
+- Credentials: keyring vault (priority) or `.env` (`SMTP_USER` / `SMTP_PASS`)
+- Run `python store_credentials.py` once to store credentials in OS keyring
+- POST `/api/deals/export/email?category=X` — sends email
+
+### Deal Storage & API
+- SQLite DB at `backend/instance/food_chaser.db`; upserts via UNIQUE INDEX on `(product_id, category)`
+- GET `/api/deals` — list all deals; `?category=X` to filter
+- GET `/api/deals/categories` — list available categories
+
 ## Planned Features (not yet built)
-- Scraper for grocery store leaflets (PDF or web-based)
-- Product/deal data extraction and normalization
 - User-defined list of tracked grocery items
 - Deal comparison across stores
-- Possibly a simple notification system for new deals

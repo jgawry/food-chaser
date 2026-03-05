@@ -2,8 +2,7 @@ import os
 
 from flask import Blueprint, jsonify, request, current_app, Response
 
-from ..scraper.lidl import scrape_all_categories
-from ..scraper.lidl_leaflet import parse_leaflet
+from ..scraper import WEB_SCRAPERS, LEAFLET_SCRAPERS
 from ..db import save_deals, get_deals, get_categories
 from ..export import generate_deals_pdf
 from ..email_report import send_deals_email
@@ -13,10 +12,16 @@ deals_bp = Blueprint("deals", __name__)
 
 @deals_bp.route("/api/scrape", methods=["POST"])
 def scrape():
+    store = (request.args.get("store") or "").strip().lower() or None
+    if store and store not in WEB_SCRAPERS:
+        return jsonify({"error": f"Unknown store '{store}'. Available: {list(WEB_SCRAPERS)}"}), 400
+    scrapers = {store: WEB_SCRAPERS[store]} if store else WEB_SCRAPERS
     try:
-        products = scrape_all_categories()
-        saved = save_deals(current_app, products)
-        return jsonify({"scraped": len(products), "saved": saved})
+        all_products = []
+        for scraper in scrapers.values():
+            all_products.extend(scraper.scrape())
+        saved = save_deals(current_app, all_products)
+        return jsonify({"scraped": len(all_products), "saved": saved})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -32,12 +37,17 @@ def list_deals():
 def scrape_leaflet():
     data = request.get_json(silent=True) or {}
     pdf_path = data.get("pdf_path", "").strip()
+    store = data.get("store", "").strip().lower()
     if not pdf_path:
         return jsonify({"error": "pdf_path is required"}), 400
+    if not store:
+        return jsonify({"error": "store is required"}), 400
+    if store not in LEAFLET_SCRAPERS:
+        return jsonify({"error": f"Unknown store '{store}'. Available: {list(LEAFLET_SCRAPERS)}"}), 400
     if not os.path.isfile(pdf_path):
         return jsonify({"error": f"File not found: {pdf_path}"}), 404
     try:
-        deals = parse_leaflet(pdf_path)
+        deals = LEAFLET_SCRAPERS[store].parse_leaflet(pdf_path)
         saved = save_deals(current_app, deals)
         return jsonify({"parsed": len(deals), "saved": saved})
     except Exception as e:
