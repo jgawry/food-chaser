@@ -8,10 +8,16 @@ Deduplication: within a single PDF, (brand, name, qty) triples are unique —
 the same item often appears on cover pages AND detail pages.
 """
 import logging
+import os
 import re
+import tempfile
 import unicodedata
+import urllib.error
+import urllib.request
 
 import fitz  # pymupdf
+
+from .lidl import _make_request, _extract_nuxt_data, _HEADERS
 
 logger = logging.getLogger(__name__)
 
@@ -428,6 +434,95 @@ def _dedup(products):
     return result
 
 
+# ── Auto-download: find & fetch the latest Lidl leaflet PDF ──────────────────
+
+_GAZETKI_URL  = "https://www.lidl.pl/c/nasze-gazetki/s10008614"
+_PDF_BASE_URL = "https://object.storage.eu01.onstackit.cloud/leaflets/pdfs"
+
+
+def _slugify_pdf(text: str) -> str:
+    """Normalise a leaflet title to the uppercase-hyphen filename style used by onstackit."""
+    import html as _html
+    text = _html.unescape(text)
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode()
+    text = re.sub(r'[\s.]+', '-', text.upper())
+    text = re.sub(r'-+', '-', text).strip('-')
+    return text
+
+
+def _fetch_latest_pdf_url() -> str:
+    """
+    Return the direct PDF download URL for the current Lidl leaflet.
+
+    Strategy:
+      1. Fetch the gazetki listing page and extract UUID + title of the first flyer
+         from its data-track-id / data-track-name / .flyer__title attributes.
+      2. Construct the base filename from the slugified name + title.
+      3. Probe onstackit storage with HEAD requests for suffixes 1–30 until
+         a 200 is found (the suffix appears to be the page count).
+    """
+    import html as _html
+
+    listing_html = _make_request(_GAZETKI_URL)
+
+    # ── Extract first flyer block ──────────────────────────────────
+    flyer_m = re.search(r'<a[^>]+class="flyer"[^>]+>.*?</a>', listing_html, re.DOTALL)
+    if not flyer_m:
+        raise RuntimeError("Could not find any flyer block on gazetki listing page")
+    flyer_html = flyer_m.group(0)
+
+    uuid_m  = re.search(r'data-track-id="([0-9a-f-]+)"', flyer_html)
+    name_m  = re.search(r'data-track-name="([^"]+)"', flyer_html)
+    title_m = re.search(r'class="flyer__title"[^>]*>\s*([^<]+)', flyer_html)
+
+    if not uuid_m or not name_m:
+        raise RuntimeError("Could not extract UUID or name from first flyer block")
+
+    uuid  = uuid_m.group(1)
+    name  = _html.unescape(name_m.group(1))
+    title = title_m.group(1).strip() if title_m else ''
+
+    base_name = _slugify_pdf(f"{name} {title}".strip())
+    logger.info("Leaflet UUID=%s  base_name=%s", uuid, base_name)
+
+    # ── Probe for numeric suffix (page count) ─────────────────────
+    for n in range(1, 31):
+        url = f"{_PDF_BASE_URL}/{uuid}/{base_name}-{n}.pdf"
+        try:
+            req = urllib.request.Request(url, headers=_HEADERS, method='HEAD')
+            with urllib.request.urlopen(req, timeout=8) as r:
+                if r.status == 200:
+                    logger.info("Found PDF at suffix %d: %s", n, url)
+                    return url
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
+        except Exception:
+            raise
+
+    raise RuntimeError(
+        f"Could not find PDF for UUID={uuid} base_name={base_name} (tried suffixes 1–30)"
+    )
+
+
+def download_latest_leaflet() -> str:
+    """
+    Download the current Lidl leaflet PDF to a temp file.
+    Returns the path to the downloaded file (caller must delete it).
+    """
+    pdf_url = _fetch_latest_pdf_url()
+    filename = pdf_url.split('/')[-1].split('?')[0] or 'lidl_leaflet.pdf'
+    tmp_path = os.path.join(tempfile.gettempdir(), filename)
+
+    req = urllib.request.Request(pdf_url, headers=_HEADERS)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        with open(tmp_path, 'wb') as f:
+            f.write(r.read())
+
+    logger.info("Downloaded latest leaflet to %s", tmp_path)
+    return tmp_path
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def parse_leaflet(pdf_path: str, store: str = 'Lidl') -> list[dict]:
@@ -492,3 +587,14 @@ class LidlLeafletScraper(LeafletScraper):
 
     def parse_leaflet(self, pdf_path: str) -> list[dict]:
         return parse_leaflet(pdf_path, store=self.store_name)
+
+    def scrape_latest(self) -> list[dict]:
+        """Download the current Lidl leaflet and parse it."""
+        pdf_path = download_latest_leaflet()
+        try:
+            return parse_leaflet(pdf_path, store=self.store_name)
+        finally:
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass

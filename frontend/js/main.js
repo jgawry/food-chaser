@@ -11,9 +11,6 @@ function renderToolbar(loading = false, currentCategory = null) {
             <button id="scrape-btn" ${loading ? "disabled" : ""}>
                 ${loading ? "Scraping…" : "Scrape Lidl deals now"}
             </button>
-            <button id="leaflet-btn" ${loading ? "disabled" : ""}>
-                Import leaflet PDF
-            </button>
             <a id="export-btn" class="toolbar-link" href="${exportUrl}" download>
                 Download PDF
             </a>
@@ -86,12 +83,6 @@ async function triggerScrape() {
     return apiFetch("/scrape", { method: "POST" });
 }
 
-async function triggerLeafletScrape(pdfPath, store) {
-    return apiFetch("/scrape/leaflet", {
-        method: "POST",
-        body: JSON.stringify({ pdf_path: pdfPath, store }),
-    });
-}
 
 // ── App ───────────────────────────────────────────────────────────
 
@@ -105,7 +96,6 @@ async function init() {
         app.innerHTML = renderToolbar(loading, currentCategory) + renderGrid(deals);
         if (!loading) {
             wireScrapeButton();
-            wireLeafletButton();
             wireEmailButton();
             renderCategoryFilter();
         }
@@ -168,26 +158,6 @@ async function init() {
             }
             btn.disabled = false;
             btn.textContent = "Email PDF";
-        });
-    }
-
-    function wireLeafletButton() {
-        const btn = document.getElementById("leaflet-btn");
-        if (!btn) return;
-        btn.addEventListener("click", async () => {
-            const pdfPath = prompt("Enter the full path to the leaflet PDF:");
-            if (!pdfPath) return;
-            const store = prompt("Store name (e.g. lidl, makro):", "lidl");
-            if (!store) return;
-            render(true);
-            try {
-                const result = await triggerLeafletScrape(pdfPath.trim(), store.trim().toLowerCase());
-                deals = await fetchDeals(currentCategory);
-                alert(`Imported ${result.parsed} deals from the leaflet.`);
-            } catch (err) {
-                alert(`Import failed: ${err.message}`);
-            }
-            render();
         });
     }
 

@@ -20,17 +20,19 @@ A grocery store leaflet scraper that finds the best deals on items of interest. 
 
 ## Features
 
-### Lidl Web Scraper
+### Scraping — POST `/api/scrape`
+Runs both sources in one shot; partial failures are returned as `warnings` in the response.
+
+#### Lidl Web Scraper (`backend/app/scraper/lidl.py`)
 - Scrapes Lidl food category pages (`/h/{slug}/{id}`, `/c/{slug}/{id}`)
 - Parses `<script id="__NUXT_DATA__">` flat JSON array for product/price data
-- POST `/api/scrape` triggers scrape and saves to SQLite DB
 
-### PDF Leaflet Scraper (`backend/app/scraper/lidl_leaflet.py`)
-- Parses Lidl promotional leaflet PDFs using `pymupdf`
-- Extracts brand, name, qty, price, old price, discount %, promo labels
-- Handles two deal types: regular deals and app-coupon ("N+M gratis") deals
+#### Lidl Leaflet Auto-downloader + Parser (`backend/app/scraper/lidl_leaflet.py`)
+- Fetches `lidl.pl/c/nasze-gazetki/s10008614`, extracts UUID (`data-track-id`) and title from the first `.flyer` block
+- Constructs PDF URL: `https://object.storage.eu01.onstackit.cloud/leaflets/pdfs/{uuid}/{SLUG}-{n}.pdf`; probes HEAD requests for `n` 1–30 to find the right suffix (appears to be page count)
+- Downloads PDF to a temp file, parses it with `pymupdf`, then deletes the temp file
+- Parses two deal types: regular discounts and app-coupon ("N+M gratis") deals
 - Filters OCR noise using Polish-text patterns
-- POST `/api/scrape/leaflet` — body: `{"pdf_path": "/absolute/path/to/leaflet.pdf"}`
 
 ### PDF Export (`backend/app/export.py`)
 - Generates styled A4 PDF report via `reportlab`, grouped by category
