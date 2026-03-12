@@ -1,0 +1,21 @@
+[Unit]
+Description=Food Chaser Backend — Staging (gunicorn)
+After=network.target
+
+[Service]
+User=food-chaser
+Group=food-chaser
+WorkingDirectory=/opt/food-chaser-staging/backend
+EnvironmentFile=/opt/food-chaser-staging/backend/.env
+ExecStart=/opt/food-chaser-staging/venv/bin/gunicorn \
+    --workers 2 \
+    --bind 127.0.0.1:5001 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    run:app
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
