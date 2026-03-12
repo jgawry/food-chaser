@@ -485,9 +485,9 @@ def _fetch_latest_pdf_url() -> str:
     base_name = _slugify_pdf(f"{name} {title}".strip())
     logger.info("Leaflet UUID=%s  base_name=%s", uuid, base_name)
 
-    # ── Probe for numeric suffix (page count) ─────────────────────
+    # ── Probe for zero-padded two-digit suffix ────────────────────
     for n in range(1, 31):
-        url = f"{_PDF_BASE_URL}/{uuid}/{base_name}-{n}.pdf"
+        url = f"{_PDF_BASE_URL}/{uuid}/{base_name}-{n:02d}.pdf"
         try:
             req = urllib.request.Request(url, headers=_HEADERS, method='HEAD')
             with urllib.request.urlopen(req, timeout=8) as r:
