@@ -12,7 +12,16 @@ STAGING_BRANCH="develop"
 
 # ── 1. System packages ────────────────────────────────────────────────────────
 apt-get update -q
-apt-get install -y python3 python3-pip python3-venv nginx git
+apt-get install -y python3 python3-pip python3-venv git
+
+# Install Caddy
+apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+    | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+    | tee /etc/apt/sources.list.d/caddy-stable.list
+apt-get update -q
+apt-get install -y caddy
 
 # ── 2. Dedicated system user ──────────────────────────────────────────────────
 if ! id "$APP_USER" &>/dev/null; then
@@ -90,16 +99,18 @@ systemctl status food-chaser --no-pager
 echo "Staging service status:"
 systemctl status food-chaser-staging --no-pager
 
-# ── 8. nginx ──────────────────────────────────────────────────────────────────
-cp "$APP_DIR/deploy/nginx-site.conf" /etc/nginx/sites-available/food-chaser
-ln -sf /etc/nginx/sites-available/food-chaser /etc/nginx/sites-enabled/food-chaser
-rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl enable nginx
-systemctl restart nginx
+# ── 8. Caddy ──────────────────────────────────────────────────────────────────
+cp "$APP_DIR/deploy/Caddyfile" /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile
+systemctl enable caddy
+systemctl restart caddy
 
 echo ""
 VM_IP=$(curl -s ifconfig.me)
 echo "Setup complete."
-echo "  Production: http://$VM_IP"
-echo "  Staging:    http://$VM_IP:8080"
+echo "  Production: https://$VM_IP"
+echo "  Staging:    https://$VM_IP:8443"
+echo ""
+echo "NOTE: TLS uses a self-signed cert (tls internal)."
+echo "  To trust it in your browser, import Caddy's root CA:"
+echo "  /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
