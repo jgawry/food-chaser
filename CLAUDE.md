@@ -4,7 +4,7 @@ A grocery store leaflet scraper that finds the best deals on items of interest. 
 
 ## Branching & Deployment
 - Default branch: `develop` — all work goes here
-- `develop` auto-deploys to staging (https://34.26.127.50:8443) via GitHub Actions on push
+- `develop` auto-deploys to staging (http://34.26.127.50:8080) via GitHub Actions on push
 - `master` is production — only merge from `develop` when releasing; do not push directly
 - Production deploy is manual: `sudo bash /opt/food-chaser/deploy/deploy.sh production` on the VM
 
