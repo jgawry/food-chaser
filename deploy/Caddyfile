@@ -1,0 +1,37 @@
+# Production — HTTPS on port 443
+:443 {
+    tls internal
+
+    reverse_proxy localhost:5000 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up Host {host}
+        transport http {
+            read_timeout  120s
+            write_timeout 120s
+        }
+    }
+
+    request_body {
+        max_size 20MB
+    }
+}
+
+# Staging — HTTPS on port 8443
+:8443 {
+    tls internal
+
+    reverse_proxy localhost:5001 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up Host {host}
+        transport http {
+            read_timeout  120s
+            write_timeout 120s
+        }
+    }
+
+    request_body {
+        max_size 20MB
+    }
+}
