@@ -39,5 +39,9 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR/backend/instance"
 echo "==> Restarting service..."
 systemctl restart "$SERVICE"
 
+echo "==> Reloading Caddy config..."
+cp "$APP_DIR/deploy/Caddyfile" /etc/caddy/Caddyfile
+systemctl reload caddy
+
 echo "==> Done. Service status:"
 systemctl status "$SERVICE" --no-pager
