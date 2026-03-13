@@ -1,10 +1,7 @@
-# Production — HTTPS on port 443
-https://34.26.127.50 {
-    tls internal
-
+# Production — HTTP on port 80
+:80 {
     reverse_proxy localhost:5000 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
         header_up Host {host}
         transport http {
             read_timeout  120s
@@ -17,13 +14,10 @@ https://34.26.127.50 {
     }
 }
 
-# Staging — HTTPS on port 8443
-https://34.26.127.50:8443 {
-    tls internal
-
+# Staging — HTTP on port 8080
+:8080 {
     reverse_proxy localhost:5001 {
         header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
         header_up Host {host}
         transport http {
             read_timeout  120s
