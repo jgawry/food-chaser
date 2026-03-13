@@ -2,6 +2,12 @@
 
 A grocery store leaflet scraper that finds the best deals on items of interest. It scrapes promotional leaflets from grocery stores, extracts product/price data, and lets the user track and compare deals across stores.
 
+## Branching & Deployment
+- Default branch: `develop` — all work goes here
+- `develop` auto-deploys to staging (https://34.26.127.50:8443) via GitHub Actions on push
+- `master` is production — only merge from `develop` when releasing; do not push directly
+- Production deploy is manual: `sudo bash /opt/food-chaser/deploy/deploy.sh production` on the VM
+
 ## Dev Commands
 - Backend: `cd backend && python run.py` (runs on localhost:5000)
 - Frontend: open `frontend/index.html` in browser (no build step)
