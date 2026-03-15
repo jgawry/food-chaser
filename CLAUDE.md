@@ -24,6 +24,15 @@ A grocery store leaflet scraper that finds the best deals on items of interest. 
 - No JS framework — keep it vanilla
 - Use `python-dotenv` for all config/secrets via `.env` (see `.env.example`)
 
+## Testing
+- Tests live in `backend/tests/`; run with `cd backend && python -m pytest`
+- Every new feature or API endpoint must have corresponding tests in `backend/tests/`
+- Every bug fix must have a test that reproduces the bug before the fix
+- Test files mirror the module they test: `test_auth.py` for auth routes, `test_routes.py` for deal routes, etc.
+- Use `conftest.py` fixtures (`client`, `flask_app`) — do not spin up a real server
+- Mock all external calls (SMTP, HTTP scrapers) — tests must run offline with no credentials
+- CI runs the full test suite before every deploy; a failing test blocks deployment
+
 ## Features
 
 ### Scraping — POST `/api/scrape`
@@ -56,5 +65,7 @@ Runs both sources in one shot; partial failures are returned as `warnings` in th
 - GET `/api/deals/categories` — list available categories
 
 ## Planned Features (not yet built)
-- User-defined list of tracked grocery items
-- Deal comparison across stores
+1. **HTTPS on production** — enable TLS once a domain is registered (one-line Caddyfile change)
+2. **Custom grocery lists** — per-user list of tracked items
+3. **Deal optimization** — for a user's grocery list, summarize the best deals across stores to minimize cost
+4. **Additional scrapers** — Makro and Biedronka (currently only Lidl)

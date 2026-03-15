@@ -13,7 +13,7 @@ _KEYRING_SERVICE = "food-chaser"
 _KEYRING_USER    = "smtp"
 
 
-_RECIPIENTS = "jgawry@gmail.com, kgawry@gmail.com"
+_RECIPIENTS = "jgawry@gmail.com"
 
 _PLAIN = (
     "Hello, this is your friendly neighborhood deals reporter.\n\n"
@@ -99,6 +99,87 @@ def _html_body(date_str: str, category: str | None) -> str:
   </table>
 </body>
 </html>"""
+
+
+def send_confirmation_email(to_email: str, token: str, app_base_url: str) -> None:
+    """Send an email confirmation link to the newly registered user."""
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", "465"))
+    user = os.environ.get("SMTP_USER", "")
+    password = os.environ.get("SMTP_PASS", "")
+
+    if not password and _keyring is not None:
+        password = _keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER) or ""
+
+    if not user or not password:
+        raise RuntimeError(
+            "SMTP credentials not found. Run `python store_credentials.py` "
+            "or set SMTP_USER / SMTP_PASS in .env"
+        )
+
+    confirm_url = f"{app_base_url}/api/auth/confirm/{token}"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:system-ui,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+        <tr>
+          <td style="background:#e63946;padding:28px 36px;">
+            <h1 style="margin:0;color:#ffffff;font-size:26px;letter-spacing:-.5px;">Food Chaser</h1>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px;">Confirm your email address</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 36px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#222;">Hello!</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#444;line-height:1.6;">
+              Thanks for registering. Click the button below to confirm your email address.
+              This link expires in <strong>24 hours</strong>.
+            </p>
+            <table cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#e63946;border-radius:6px;padding:14px 28px;">
+                  <a href="{confirm_url}"
+                     style="color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">
+                    Confirm your email
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:24px 0 0;font-size:13px;color:#888;">
+              If the button doesn't work, copy this link into your browser:<br>
+              <a href="{confirm_url}" style="color:#e63946;">{confirm_url}</a>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9f9f9;padding:18px 36px;border-top:1px solid #eeeeee;">
+            <p style="margin:0;font-size:12px;color:#999;">
+              If you didn't create an account, you can safely ignore this email. &mdash;
+              <strong style="color:#e63946;">Food Chaser</strong>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    msg = EmailMessage()
+    msg["Subject"] = "Confirm your Food Chaser account"
+    msg["From"] = user
+    msg["To"] = to_email
+    msg.set_content(f"Confirm your email: {confirm_url}")
+    msg.add_alternative(html, subtype="html")
+
+    with smtplib.SMTP_SSL(host, port) as smtp:
+        smtp.login(user, password)
+        smtp.send_message(msg)
 
 
 def send_deals_email(pdf_bytes: bytes, category: str = None) -> None:

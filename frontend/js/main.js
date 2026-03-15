@@ -87,13 +87,30 @@ async function triggerScrape() {
 // ── App ───────────────────────────────────────────────────────────
 
 async function init() {
+    // Handle email confirmation redirect
+    const params = new URLSearchParams(location.search);
+    let confirmedMessage = "";
+    if (params.get("confirmed") === "1") {
+        history.replaceState({}, "", "/");
+        confirmedMessage = "Email confirmed! You can now sign in.";
+    }
+
+    // Auth gate
+    const user = await getCurrentUser();
+    if (!user) {
+        app.innerHTML = renderLoginView(confirmedMessage);
+        wireAuthForms();
+        return;
+    }
+
     let currentCategory = null;
     let deals = [];
 
     try { deals = await fetchDeals(); } catch (_) { /* empty on first run */ }
 
     function render(loading = false) {
-        app.innerHTML = renderToolbar(loading, currentCategory) + renderGrid(deals);
+        app.innerHTML = renderAuthBar(user.email) + renderToolbar(loading, currentCategory) + renderGrid(deals);
+        wireAuthBar();
         if (!loading) {
             wireScrapeButton();
             wireEmailButton();

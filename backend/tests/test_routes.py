@@ -50,11 +50,11 @@ class TestScrapeRoute:
         assert resp.status_code == 400
         assert "Unknown store" in resp.get_json()["error"]
 
-    def test_scrape_exception_returns_500(self, client):
+    def test_scrape_exception_captured_as_warning(self, client):
         with patch("app.scraper.lidl.scrape_all_categories", side_effect=RuntimeError("network error")):
             resp = client.post("/api/scrape")
-        assert resp.status_code == 500
-        assert "error" in resp.get_json()
+        assert resp.status_code == 200
+        assert "warnings" in resp.get_json()
 
 
 # ── POST /api/scrape/leaflet ──────────────────────────────────────────────────

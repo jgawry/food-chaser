@@ -4,6 +4,21 @@ from datetime import datetime, timezone
 
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    email         TEXT    NOT NULL UNIQUE,
+    password_hash TEXT    NOT NULL,
+    is_confirmed  INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS email_confirmation_tokens (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT    NOT NULL UNIQUE,
+    expires_at TEXT    NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS deals (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id   TEXT NOT NULL,
