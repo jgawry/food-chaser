@@ -19,9 +19,9 @@ def _try_register(name, bold_name, path, bold_path):
     try:
         pdfmetrics.registerFont(TTFont(name,      path))
         pdfmetrics.registerFont(TTFont(bold_name, bold_path))
-        return name, bold_name
+        return (name, bold_name)
     except Exception:
-        return None, None
+        return None
 
 _FONT_NORMAL, _FONT_BOLD = (
     _try_register('Calibri', 'Calibri-Bold',
