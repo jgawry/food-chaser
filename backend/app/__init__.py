@@ -2,7 +2,7 @@ import os
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from .extensions import limiter
-from .routes import main_bp, deals_bp
+from .routes import main_bp, deals_bp, grocery_bp
 from .db import init_db
 
 _FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'frontend'))
@@ -23,6 +23,7 @@ def create_app(instance_path=None):
 
     app.register_blueprint(main_bp)
     app.register_blueprint(deals_bp)
+    app.register_blueprint(grocery_bp)
 
     from .routes import auth_bp
     app.register_blueprint(auth_bp)

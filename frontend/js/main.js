@@ -1,5 +1,16 @@
 const app = document.getElementById("app");
 
+// ── Tab navigation ───────────────────────────────────────────────
+
+function renderTabs(activeTab) {
+    return `
+        <nav class="tab-bar">
+            <button class="tab-btn${activeTab === "deals" ? " active" : ""}" data-tab="deals">Deals</button>
+            <button class="tab-btn${activeTab === "grocery" ? " active" : ""}" data-tab="grocery">My List</button>
+        </nav>
+    `;
+}
+
 // ── Render helpers ────────────────────────────────────────────────
 
 function renderToolbar(loading = false, currentCategory = null) {
@@ -103,19 +114,51 @@ async function init() {
         return;
     }
 
+    let activeTab = "deals";
     let currentCategory = null;
     let deals = [];
+    let groceryItems = [];
+    let editingGroceryId = null;
 
     try { deals = await fetchDeals(); } catch (_) { /* empty on first run */ }
 
     function render(loading = false) {
-        app.innerHTML = renderAuthBar(user.email) + renderToolbar(loading, currentCategory) + renderGrid(deals);
+        let content;
+        if (activeTab === "grocery") {
+            content = renderGroceryView(groceryItems, editingGroceryId);
+        } else {
+            content = renderToolbar(loading, currentCategory) + renderGrid(deals);
+        }
+        app.innerHTML = renderAuthBar(user.email) + renderTabs(activeTab) + content;
         wireAuthBar();
-        if (!loading) {
+        wireTabs();
+
+        if (activeTab === "grocery") {
+            wireGroceryView(groceryItems, editingGroceryId, async (editId) => {
+                editingGroceryId = editId || null;
+                try { groceryItems = await fetchGroceryItems(); } catch (_) {}
+                render();
+            });
+        } else if (!loading) {
             wireScrapeButton();
             wireEmailButton();
             renderCategoryFilter();
         }
+    }
+
+    function wireTabs() {
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                const tab = btn.dataset.tab;
+                if (tab === activeTab) return;
+                activeTab = tab;
+                if (tab === "grocery") {
+                    try { groceryItems = await fetchGroceryItems(); } catch (_) {}
+                }
+                editingGroceryId = null;
+                render();
+            });
+        });
     }
 
     async function renderCategoryFilter() {
