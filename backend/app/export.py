@@ -54,17 +54,17 @@ def generate_deals_pdf(deals: list) -> bytes:
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        'Title', parent=styles['Normal'],
+        'FC_Title', parent=styles['Normal'],
         fontSize=20, fontName=_FONT_BOLD,
         textColor=_RED, spaceAfter=4,
     )
     subtitle_style = ParagraphStyle(
-        'Subtitle', parent=styles['Normal'],
+        'FC_Subtitle', parent=styles['Normal'],
         fontSize=9, fontName=_FONT_NORMAL,
         textColor=_GRAY, spaceAfter=12,
     )
     cat_style = ParagraphStyle(
-        'Cat', parent=styles['Normal'],
+        'FC_Cat', parent=styles['Normal'],
         fontSize=11, fontName=_FONT_BOLD,
         textColor=_RED, spaceBefore=14, spaceAfter=4,
     )
