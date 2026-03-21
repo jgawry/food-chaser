@@ -42,12 +42,23 @@ def _get_smtp_credentials() -> tuple[str, str, str, int]:
     host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     port = int(os.environ.get("SMTP_PORT", "465"))
 
-    user = os.environ.get("SMTP_USER", "") or _get_gcp_secret("smtp-user")
-    password = os.environ.get("SMTP_PASS", "") or _get_gcp_secret("smtp-pass")
+    env_user = os.environ.get("SMTP_USER", "")
+    env_pass = os.environ.get("SMTP_PASS", "")
+    gcp_user = _get_gcp_secret("smtp-user") if not env_user else ""
+    gcp_pass = _get_gcp_secret("smtp-pass") if not env_pass else ""
+
+    user = env_user or gcp_user
+    password = env_pass or gcp_pass
 
     if not password and _keyring is not None:
         user = user or _keyring.get_password(_KEYRING_SERVICE, "smtp-user") or ""
         password = _keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER) or ""
+
+    source = "env" if env_pass else ("gcp" if gcp_pass else ("keyring" if password else "none"))
+    logger.info(
+        "SMTP credentials resolved: host=%s, port=%d, user=%s, password_len=%d, source=%s",
+        host, port, user, len(password), source,
+    )
 
     if not user or not password:
         raise RuntimeError(
@@ -210,9 +221,15 @@ def send_confirmation_email(to_email: str, token: str, app_base_url: str) -> Non
     msg.set_content(f"Confirm your email: {confirm_url}")
     msg.add_alternative(html, subtype="html")
 
-    with smtplib.SMTP_SSL(host, port) as smtp:
-        smtp.login(user, password)
-        smtp.send_message(msg)
+    logger.info("Sending confirmation email to=%s via %s:%d", to_email, host, port)
+    try:
+        with smtplib.SMTP_SSL(host, port) as smtp:
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        logger.info("Confirmation email sent successfully to %s", to_email)
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error("SMTP auth failed: code=%s, msg=%s, user=%s, pass_len=%d", e.smtp_code, e.smtp_error, user, len(password))
+        raise
 
 
 def send_deals_email(pdf_bytes: bytes, category: str = None) -> None:
@@ -233,6 +250,12 @@ def send_deals_email(pdf_bytes: bytes, category: str = None) -> None:
     msg.add_alternative(_html_body(date_str, category), subtype="html")
     msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
 
-    with smtplib.SMTP_SSL(host, port) as smtp:
-        smtp.login(user, password)
-        smtp.send_message(msg)
+    logger.info("Sending deals email to=%s via %s:%d", _RECIPIENTS, host, port)
+    try:
+        with smtplib.SMTP_SSL(host, port) as smtp:
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        logger.info("Deals email sent successfully to %s", _RECIPIENTS)
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error("SMTP auth failed: code=%s, msg=%s, user=%s, pass_len=%d", e.smtp_code, e.smtp_error, user, len(password))
+        raise
