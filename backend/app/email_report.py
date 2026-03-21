@@ -1,4 +1,5 @@
 """Send the deals PDF report via email."""
+import logging
 import os
 import smtplib
 from datetime import datetime
@@ -9,8 +10,52 @@ try:
 except ImportError:
     _keyring = None
 
+try:
+    from google.cloud import secretmanager as _sm
+    _sm_client = _sm.SecretManagerServiceClient()
+except Exception:
+    _sm_client = None
+
+logger = logging.getLogger(__name__)
+
 _KEYRING_SERVICE = "food-chaser"
 _KEYRING_USER    = "smtp"
+
+def _get_gcp_secret(secret_id: str) -> str:
+    """Fetch the latest version of a secret from GCP Secret Manager."""
+    if _sm_client is None:
+        return ""
+    try:
+        project = os.environ.get("GCP_PROJECT", "")
+        if not project:
+            return ""
+        name = f"projects/{project}/secrets/{secret_id}/versions/latest"
+        response = _sm_client.access_secret_version(request={"name": name})
+        return response.payload.data.decode("utf-8")
+    except Exception as e:
+        logger.debug("Could not fetch GCP secret %s: %s", secret_id, e)
+        return ""
+
+
+def _get_smtp_credentials() -> tuple[str, str, str, int]:
+    """Return (host, port, user, password) from GCP secrets, env vars, or keyring."""
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT", "465"))
+
+    user = os.environ.get("SMTP_USER", "") or _get_gcp_secret("smtp-user")
+    password = os.environ.get("SMTP_PASS", "") or _get_gcp_secret("smtp-pass")
+
+    if not password and _keyring is not None:
+        user = user or _keyring.get_password(_KEYRING_SERVICE, "smtp-user") or ""
+        password = _keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER) or ""
+
+    if not user or not password:
+        raise RuntimeError(
+            "SMTP credentials not found. Set SMTP_USER / SMTP_PASS in .env, "
+            "store them in GCP Secret Manager, or run `python store_credentials.py`"
+        )
+
+    return host, port, user, password
 
 
 _RECIPIENTS = "jgawry@gmail.com"
@@ -103,19 +148,7 @@ def _html_body(date_str: str, category: str | None) -> str:
 
 def send_confirmation_email(to_email: str, token: str, app_base_url: str) -> None:
     """Send an email confirmation link to the newly registered user."""
-    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    port = int(os.environ.get("SMTP_PORT", "465"))
-    user = os.environ.get("SMTP_USER", "")
-    password = os.environ.get("SMTP_PASS", "")
-
-    if not password and _keyring is not None:
-        password = _keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER) or ""
-
-    if not user or not password:
-        raise RuntimeError(
-            "SMTP credentials not found. Run `python store_credentials.py` "
-            "or set SMTP_USER / SMTP_PASS in .env"
-        )
+    host, port, user, password = _get_smtp_credentials()
 
     confirm_url = f"{app_base_url}/api/auth/confirm/{token}"
 
@@ -183,29 +216,8 @@ def send_confirmation_email(to_email: str, token: str, app_base_url: str) -> Non
 
 
 def send_deals_email(pdf_bytes: bytes, category: str = None) -> None:
-    """
-    Send *pdf_bytes* as an email attachment.
-
-    Required env vars:
-      SMTP_HOST  – default smtp.gmail.com
-      SMTP_PORT  – default 465  (SSL)
-      SMTP_USER  – sender address / Gmail account
-      SMTP_PASS  – Gmail App Password (not your regular password)
-    """
-    host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    port = int(os.environ.get("SMTP_PORT", "465"))
-    user = os.environ.get("SMTP_USER", "")
-    password = os.environ.get("SMTP_PASS", "")
-
-    # Prefer credential vault over .env
-    if not password and _keyring is not None:
-        password = _keyring.get_password(_KEYRING_SERVICE, _KEYRING_USER) or ""
-
-    if not user or not password:
-        raise RuntimeError(
-            "SMTP credentials not found. Run `python store_credentials.py` "
-            "or set SMTP_USER / SMTP_PASS in .env"
-        )
+    """Send *pdf_bytes* as an email attachment."""
+    host, port, user, password = _get_smtp_credentials()
 
     date_str = datetime.now().strftime("%d %b %Y")
     subject = f"Food Chaser Report: {date_str}"

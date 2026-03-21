@@ -134,6 +134,50 @@ class TestConfirm:
         assert resp.status_code == 404
 
 
+# ── POST /api/auth/resend-confirmation ────────────────────────────────────────
+
+class TestResendConfirmation:
+    def test_resend_for_unconfirmed_user(self, client, flask_app):
+        _register(client)
+        with patch("app.email_report.send_confirmation_email") as mock_send:
+            resp = client.post("/api/auth/resend-confirmation", json={"email": "user@example.com"})
+        assert resp.status_code == 200
+        mock_send.assert_called_once()
+
+    def test_creates_fresh_token(self, client, flask_app):
+        _register(client)
+        with _connect(flask_app) as conn:
+            old_token = conn.execute("SELECT token FROM email_confirmation_tokens LIMIT 1").fetchone()[0]
+        with patch("app.email_report.send_confirmation_email"):
+            client.post("/api/auth/resend-confirmation", json={"email": "user@example.com"})
+        with _connect(flask_app) as conn:
+            new_token = conn.execute("SELECT token FROM email_confirmation_tokens LIMIT 1").fetchone()[0]
+        assert old_token != new_token
+
+    def test_new_token_works_for_confirmation(self, client, flask_app):
+        _register(client)
+        with patch("app.email_report.send_confirmation_email"):
+            client.post("/api/auth/resend-confirmation", json={"email": "user@example.com"})
+        with _connect(flask_app) as conn:
+            token = conn.execute("SELECT token FROM email_confirmation_tokens LIMIT 1").fetchone()[0]
+        resp = client.get(f"/api/auth/confirm/{token}")
+        assert resp.status_code == 302
+
+    def test_confirmed_user_gets_generic_response(self, client, flask_app, confirmed_user):
+        with patch("app.email_report.send_confirmation_email") as mock_send:
+            resp = client.post("/api/auth/resend-confirmation", json={"email": "user@example.com"})
+        assert resp.status_code == 200
+        mock_send.assert_not_called()
+
+    def test_unknown_email_gets_generic_response(self, client):
+        resp = client.post("/api/auth/resend-confirmation", json={"email": "nobody@example.com"})
+        assert resp.status_code == 200
+
+    def test_missing_email_returns_400(self, client):
+        resp = client.post("/api/auth/resend-confirmation", json={})
+        assert resp.status_code == 400
+
+
 # ── POST /api/auth/login ──────────────────────────────────────────────────────
 
 class TestLogin:

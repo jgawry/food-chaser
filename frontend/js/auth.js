@@ -102,7 +102,21 @@ function wireAuthForms() {
             } catch (err) {
                 const status = err.message.match(/\d+/)?.[0];
                 if (status === "403") {
-                    errorEl.textContent = "Please confirm your email before logging in.";
+                    errorEl.innerHTML = 'Please confirm your email before logging in. <a href="#" id="resend-link">Resend confirmation</a>';
+                    document.getElementById("resend-link")?.addEventListener("click", async (ev) => {
+                        ev.preventDefault();
+                        try {
+                            await apiFetch("/auth/resend-confirmation", {
+                                method: "POST",
+                                body: JSON.stringify({ email }),
+                            });
+                            errorEl.innerHTML = "";
+                            errorEl.textContent = "Confirmation email sent! Check your inbox.";
+                            errorEl.style.color = "#2a9d4e";
+                        } catch (_) {
+                            errorEl.textContent = "Failed to resend. Try again later.";
+                        }
+                    });
                 } else {
                     errorEl.textContent = "Invalid email or password.";
                 }

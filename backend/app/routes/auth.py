@@ -66,6 +66,46 @@ def register():
     return jsonify({"message": "Registration successful. Check your email to confirm your account."}), 201
 
 
+# ── Resend confirmation ───────────────────────────────────────────
+
+@auth_bp.route("/resend-confirmation", methods=["POST"])
+@limiter.limit("3 per hour")
+def resend_confirmation():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    with _connect(current_app) as conn:
+        conn.row_factory = sqlite3.Row
+        user = conn.execute(
+            "SELECT id, is_confirmed FROM users WHERE email = ?", (email,)
+        ).fetchone()
+
+    if not user or user["is_confirmed"]:
+        # Don't reveal whether the email exists
+        return jsonify({"message": "If that email is registered and unconfirmed, a new link has been sent."}), 200
+
+    # Delete old tokens and create a new one
+    with _connect(current_app) as conn:
+        conn.execute("DELETE FROM email_confirmation_tokens WHERE user_id = ?", (user["id"],))
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        conn.execute(
+            "INSERT INTO email_confirmation_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            (user["id"], token, expires_at),
+        )
+
+    try:
+        from ..email_report import send_confirmation_email
+        send_confirmation_email(email, token, current_app.config["APP_BASE_URL"])
+    except Exception as exc:
+        current_app.logger.error("Failed to resend confirmation email: %s", exc)
+
+    return jsonify({"message": "If that email is registered and unconfirmed, a new link has been sent."}), 200
+
+
 # ── Confirm ───────────────────────────────────────────────────────
 
 @auth_bp.route("/confirm/<token>")
