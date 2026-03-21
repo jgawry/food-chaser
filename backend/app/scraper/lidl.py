@@ -134,7 +134,7 @@ def _parse_products_from_nuxt(nuxt_array: list, category_label: str) -> list[dic
                 and 6 <= len(v) <= 80
                 and not _NAME_JUNK_RE.search(v)
                 and any(c.isalpha() for c in v)
-                and "%" not in v
+                and not _DISCOUNT_RE.search(v)
             ):
                 name = v
                 break

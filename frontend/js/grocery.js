@@ -57,10 +57,32 @@ function renderGroceryItem(item, editingId) {
     `;
 }
 
-function renderGroceryView(items, editingId) {
+function renderGroceryView(items, editingId, myListDeals) {
     const listHtml = items.length
         ? `<ul class="grocery-list">${items.map(i => renderGroceryItem(i, editingId)).join("")}</ul>`
         : `<p class="empty">Your grocery list is empty. Add items above.</p>`;
+
+    const showingDeals = myListDeals !== null;
+    const btnLabel = showingDeals ? "Hide matching deals" : "Show matching deals";
+    const dealsBtn = items.length
+        ? `<button id="mylist-deals-btn" class="toolbar-btn${showingDeals ? " active" : ""}">${btnLabel}</button>`
+        : "";
+
+    let dealsHtml = "";
+    if (showingDeals) {
+        if (myListDeals.length) {
+            dealsHtml = `
+                <div class="mylist-deals">
+                    <h3 class="mylist-deals-heading">Deals matching your list (${myListDeals.length})</h3>
+                    <div class="deals-grid">${myListDeals.map(renderCard).join("")}</div>
+                </div>`;
+        } else {
+            dealsHtml = `
+                <div class="mylist-deals">
+                    <p class="empty">No current deals match your grocery list.</p>
+                </div>`;
+        }
+    }
 
     return `
         <div class="grocery-container">
@@ -70,6 +92,8 @@ function renderGroceryView(items, editingId) {
                 <button type="submit">Add</button>
             </form>
             ${listHtml}
+            ${dealsBtn}
+            ${dealsHtml}
         </div>
     `;
 }

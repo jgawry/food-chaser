@@ -1,9 +1,10 @@
 import os
 
-from flask import Blueprint, jsonify, request, current_app, Response
+from flask import Blueprint, jsonify, request, current_app, Response, g
 
 from ..scraper import WEB_SCRAPERS, LEAFLET_SCRAPERS
-from ..db import save_deals, get_deals, get_categories
+from ..db import save_deals, get_deals, get_categories, get_deals_for_grocery_list
+from ..auth_utils import require_auth
 from ..export import generate_deals_pdf
 from ..email_report import send_deals_email
 
@@ -38,7 +39,7 @@ def scrape():
             except Exception as e:
                 errors.append(f"leaflet ({store_name}): {e}")
 
-    saved = save_deals(current_app, all_products) if all_products else 0
+    saved = save_deals(current_app, all_products, remove_stale=True) if all_products else 0
     result = {"scraped": len(all_products), "saved": saved}
     if errors:
         result["warnings"] = errors
@@ -78,6 +79,15 @@ def list_deals():
 def list_categories():
     cats = get_categories(current_app)
     return jsonify({"categories": cats})
+
+
+@deals_bp.route("/api/deals/my-list", methods=["GET"])
+@require_auth
+def deals_for_my_list():
+    """Return only deals matching the authenticated user's grocery list."""
+    category = request.args.get("category")
+    deals = get_deals_for_grocery_list(current_app, g.current_user_id, category or None)
+    return jsonify({"deals": deals, "count": len(deals)})
 
 
 @deals_bp.route("/api/deals/export/pdf", methods=["GET"])

@@ -60,6 +60,7 @@ function renderCard(deal) {
             ${qty}
             ${priceLine}
             <p class="deal-category">${deal.category}</p>
+            ${deal.matched_items ? `<p class="deal-matched">Matches: ${deal.matched_items.join(", ")}</p>` : ""}
         </div>
     `;
 
@@ -81,6 +82,14 @@ async function fetchDeals(category = null) {
     const path = category
         ? `/deals?category=${encodeURIComponent(category)}`
         : "/deals";
+    const data = await apiFetch(path);
+    return data.deals;
+}
+
+async function fetchMyListDeals(category = null) {
+    const path = category
+        ? `/deals/my-list?category=${encodeURIComponent(category)}`
+        : "/deals/my-list";
     const data = await apiFetch(path);
     return data.deals;
 }
@@ -119,13 +128,14 @@ async function init() {
     let deals = [];
     let groceryItems = [];
     let editingGroceryId = null;
+    let myListDeals = null; // null = not loaded, [] = loaded but empty
 
     try { deals = await fetchDeals(); } catch (_) { /* empty on first run */ }
 
     function render(loading = false) {
         let content;
         if (activeTab === "grocery") {
-            content = renderGroceryView(groceryItems, editingGroceryId);
+            content = renderGroceryView(groceryItems, editingGroceryId, myListDeals);
         } else {
             content = renderToolbar(loading, currentCategory) + renderGrid(deals);
         }
@@ -137,8 +147,12 @@ async function init() {
             wireGroceryView(groceryItems, editingGroceryId, async (editId) => {
                 editingGroceryId = editId || null;
                 try { groceryItems = await fetchGroceryItems(); } catch (_) {}
+                if (myListDeals !== null) {
+                    try { myListDeals = await fetchMyListDeals(); } catch (_) {}
+                }
                 render();
             });
+            wireMyListDealsButton();
         } else if (!loading) {
             wireScrapeButton();
             wireEmailButton();
@@ -154,6 +168,7 @@ async function init() {
                 activeTab = tab;
                 if (tab === "grocery") {
                     try { groceryItems = await fetchGroceryItems(); } catch (_) {}
+                    myListDeals = null;
                 }
                 editingGroceryId = null;
                 render();
@@ -196,6 +211,24 @@ async function init() {
                 deals = await fetchDeals(currentCategory);
             } catch (err) {
                 alert(`Scrape failed: ${err.message}`);
+            }
+            render();
+        });
+    }
+
+    function wireMyListDealsButton() {
+        const btn = document.getElementById("mylist-deals-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            if (myListDeals !== null) {
+                myListDeals = null;
+            } else {
+                try {
+                    myListDeals = await fetchMyListDeals();
+                } catch (err) {
+                    alert(`Failed to load deals: ${err.message}`);
+                    return;
+                }
             }
             render();
         });

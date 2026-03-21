@@ -208,6 +208,35 @@ main {
     margin-top: auto;
 }
 
+.deal-matched {
+    font-size: 0.75rem;
+    color: #2a9d4e;
+    font-weight: 600;
+}
+
+/* ── My list filter button ── */
+.toolbar-btn {
+    border: 1px solid #ddd;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+    background: #fff;
+    color: #333;
+}
+
+.toolbar-btn:hover {
+    background: #f0f0f0;
+}
+
+.toolbar-btn.active {
+    background: #2a9d4e;
+    color: white;
+    border-color: #2a9d4e;
+}
+
 .empty {
     color: #888;
     font-style: italic;
@@ -357,7 +386,7 @@ main {
 
 /* ── Grocery list ── */
 .grocery-container {
-    max-width: 600px;
+    max-width: 900px;
 }
 
 .grocery-add-form {
@@ -494,4 +523,20 @@ main {
 
 .grocery-edit-qty:focus {
     border-color: #e63946;
+}
+
+/* ── My list deals section ── */
+.mylist-deals {
+    margin-top: 1.5rem;
+}
+
+.mylist-deals-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 1rem;
+}
+
+#mylist-deals-btn {
+    margin-top: 1.25rem;
 }

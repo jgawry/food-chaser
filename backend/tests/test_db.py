@@ -48,6 +48,39 @@ class TestSaveDeals:
         assert deals[0]["qty"] is None
         assert deals[0]["old_price"] is None
 
+    def test_remove_stale_deletes_old_deals_same_source(self, flask_app, sample_deal):
+        """Deals from the same source not in the new batch should be removed."""
+        old_deal = {**sample_deal, "product_id": "old-001", "source": "web"}
+        save_deals(flask_app, [old_deal])
+        assert len(get_deals(flask_app)) == 1
+
+        new_deal = {**sample_deal, "product_id": "new-001", "source": "web"}
+        save_deals(flask_app, [new_deal], remove_stale=True)
+        deals = get_deals(flask_app)
+        assert len(deals) == 1
+        assert deals[0]["product_id"] == "new-001"
+
+    def test_remove_stale_preserves_other_sources(self, flask_app, sample_deal):
+        """Stale removal only affects sources present in the new batch."""
+        leaflet_deal = {**sample_deal, "product_id": "leaf-001", "source": "leaflet"}
+        save_deals(flask_app, [leaflet_deal])
+
+        web_deal = {**sample_deal, "product_id": "web-001", "source": "web"}
+        save_deals(flask_app, [web_deal], remove_stale=True)
+        deals = get_deals(flask_app)
+        ids = {d["product_id"] for d in deals}
+        assert "leaf-001" in ids
+        assert "web-001" in ids
+
+    def test_remove_stale_false_keeps_old_deals(self, flask_app, sample_deal):
+        """Default behavior (remove_stale=False) should keep old deals."""
+        old_deal = {**sample_deal, "product_id": "old-001", "source": "web"}
+        save_deals(flask_app, [old_deal])
+
+        new_deal = {**sample_deal, "product_id": "new-001", "source": "web"}
+        save_deals(flask_app, [new_deal], remove_stale=False)
+        assert len(get_deals(flask_app)) == 2
+
 
 class TestGetDeals:
     def test_returns_all_deals(self, populated_db):

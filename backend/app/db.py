@@ -75,7 +75,7 @@ def _connect(app):
     return sqlite3.connect(app.config["DATABASE"])
 
 
-def save_deals(app, deals: list) -> int:
+def save_deals(app, deals: list, remove_stale: bool = False) -> int:
     if not deals:
         return 0
     now = datetime.now(timezone.utc).isoformat()
@@ -105,6 +105,14 @@ def save_deals(app, deals: list) -> int:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
+        if remove_stale:
+            # Delete deals from the same sources that were not refreshed in this scrape
+            sources = {d.get("source", "web") for d in deals}
+            for source in sources:
+                conn.execute(
+                    "DELETE FROM deals WHERE source = ? AND scraped_at < ?",
+                    (source, now),
+                )
     return len(rows)
 
 
@@ -180,3 +188,39 @@ def delete_grocery_item(app, item_id: int, user_id: int) -> bool:
             (item_id, user_id),
         )
     return cur.rowcount > 0
+
+
+def get_deals_for_grocery_list(app, user_id: int, category: str = None) -> list:
+    """Return deals whose name matches any item on the user's grocery list."""
+    with _connect(app) as conn:
+        conn.row_factory = sqlite3.Row
+        items = conn.execute(
+            "SELECT name FROM grocery_items WHERE user_id = ?", (user_id,)
+        ).fetchall()
+
+    if not items:
+        return []
+
+    with _connect(app) as conn:
+        conn.row_factory = sqlite3.Row
+        where_clause = " OR ".join("LOWER(name) LIKE ?" for _ in items)
+        like_params = [f"%{item['name'].lower()}%" for item in items]
+        if category:
+            where_clause = f"({where_clause}) AND category = ?"
+            like_params.append(category)
+
+        rows = conn.execute(
+            f"SELECT * FROM deals WHERE {where_clause} ORDER BY discount_pct DESC NULLS LAST",
+            like_params,
+        ).fetchall()
+
+    # Annotate each deal with which grocery items it matched
+    deal_list = []
+    item_names = [item["name"] for item in items]
+    for row in rows:
+        d = dict(row)
+        deal_name_lower = (d.get("name") or "").lower()
+        d["matched_items"] = [n for n in item_names if n.lower() in deal_name_lower]
+        deal_list.append(d)
+
+    return deal_list

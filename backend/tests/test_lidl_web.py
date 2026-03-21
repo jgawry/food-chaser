@@ -77,3 +77,25 @@ class TestParseProductsFromNuxt:
             assert "category" in product
             assert "price" in product
             assert product["category"] == "Napoje"
+
+    def test_name_with_percentage_not_rejected(self):
+        """Product names containing % (e.g. fat content) must not be skipped."""
+        nuxt = [None] * 80
+        nuxt[20] = "/p/pilos-maslo-ekstra-82/p10033120"
+        nuxt[35] = "Masło ekstra 82%"
+        nuxt[60] = 1.89
+        nuxt[62] = 4.99
+        result = _parse_products_from_nuxt(nuxt, "Sery i nabiał")
+        assert len(result) == 1
+        assert result[0]["name"] == "Masło ekstra 82%"
+
+    def test_discount_string_still_rejected_as_name(self):
+        """Discount strings like '37% taniej' must still be skipped as names."""
+        nuxt = [None] * 80
+        nuxt[20] = "/p/test-product/p10000001"
+        nuxt[35] = "37% taniej"
+        nuxt[38] = "Actual product name"
+        nuxt[60] = 2.99
+        result = _parse_products_from_nuxt(nuxt, "Test")
+        assert len(result) == 1
+        assert result[0]["name"] == "Actual product name"
