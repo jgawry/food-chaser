@@ -33,7 +33,9 @@ SAMPLE_DEALS = [
 
 class TestScrapeRoute:
     def test_scrape_all_stores(self, client, flask_app):
-        with patch("app.scraper.lidl.scrape_all_categories", return_value=SAMPLE_DEALS):
+        with patch("app.scraper.lidl.scrape_all_categories", return_value=SAMPLE_DEALS), \
+             patch("app.scraper.makro_leaflet.MakroLeafletScraper.scrape_latest", return_value=[]), \
+             patch("app.scraper.lidl_leaflet.LidlLeafletScraper.scrape_latest", return_value=[]):
             resp = client.post("/api/scrape")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -75,7 +77,7 @@ class TestScrapeLeafletRoute:
     def test_unknown_store_returns_400(self, client, tmp_path):
         pdf = tmp_path / "test.pdf"
         pdf.write_bytes(b"%PDF")
-        resp = client.post("/api/scrape/leaflet", json={"pdf_path": str(pdf), "store": "makro"})
+        resp = client.post("/api/scrape/leaflet", json={"pdf_path": str(pdf), "store": "biedronka"})
         assert resp.status_code == 400
         assert "Unknown store" in resp.get_json()["error"]
 
