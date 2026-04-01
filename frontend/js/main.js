@@ -20,7 +20,7 @@ function renderToolbar(loading = false, currentCategory = null) {
     return `
         <div class="toolbar">
             <button id="scrape-btn" ${loading ? "disabled" : ""}>
-                ${loading ? "Scraping…" : "Scrape Lidl deals now"}
+                ${loading ? "Scraping…" : "Scrape all deals now"}
             </button>
             <a id="export-btn" class="toolbar-link" href="${exportUrl}" download>
                 Download PDF
@@ -71,7 +71,7 @@ function renderCard(deal) {
 
 function renderGrid(deals) {
     if (!deals.length) {
-        return `<p class="empty">No deals yet — click "Scrape Lidl deals now" to fetch.</p>`;
+        return `<p class="empty">No deals yet — click "Scrape all deals now" to fetch.</p>`;
     }
     return `<div class="deals-grid">${deals.map(renderCard).join("")}</div>`;
 }

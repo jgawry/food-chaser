@@ -55,17 +55,27 @@ Runs both sources in one shot; partial failures are returned as `warnings` in th
 
 ### Email Reports (`backend/app/email_report.py`)
 - Sends deal report as HTML email with PDF attachment via SMTP (Gmail/SSL port 465)
-- Credentials: keyring vault (priority) or `.env` (`SMTP_USER` / `SMTP_PASS`)
-- Run `python store_credentials.py` once to store credentials in OS keyring
+- Credentials resolved in order: GCP Secret Manager → env vars (`SMTP_USER`/`SMTP_PASS`) → OS keyring
 - POST `/api/deals/export/email?category=X` — sends email
 
 ### Deal Storage & API
 - SQLite DB at `backend/instance/food_chaser.db`; upserts via UNIQUE INDEX on `(product_id, category)`
+- Stale deal cleanup: scraping with `remove_stale=True` deletes deals from the same source not refreshed in the current batch
 - GET `/api/deals` — list all deals; `?category=X` to filter
 - GET `/api/deals/categories` — list available categories
+- GET `/api/deals/my-list` — deals matching the user's grocery list (requires auth); returns `matched_items` annotation per deal
+
+### Authentication (`backend/app/routes/auth.py`)
+- Register with email + password (8+ chars), confirmation email with 24h token
+- POST `/api/auth/resend-confirmation` — resend confirmation for unconfirmed accounts (rate limited 3/hr)
+- JWT-based login; token stored in `localStorage`
+
+### Custom Grocery Lists (`backend/app/routes/grocery.py`)
+- Per-user CRUD: GET/POST/PUT/DELETE on `/api/grocery-list`
+- "Show matching deals" button on My List tab fetches and displays deal cards matching grocery items
 
 ## Planned Features (not yet built)
 1. **HTTPS on production** — enable TLS once a domain is registered (one-line Caddyfile change)
-2. **Custom grocery lists** — per-user list of tracked items
-3. **Deal optimization** — for a user's grocery list, summarize the best deals across stores to minimize cost
-4. **Additional scrapers** — Makro and Biedronka (currently only Lidl)
+2. **Deal optimization** — for a user's grocery list, summarize the best deals across stores to minimize cost
+3. **Additional scrapers** — Makro and Biedronka (currently only Lidl)
+4. **Environment config in code** — manage `.env` per environment (dev/staging/prod) in the repo so deployment doesn't require manual VM setup; use GCP Secret Manager for secrets, checked-in config for everything else
