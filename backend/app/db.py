@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS deals (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_deals_product_category
     ON deals (product_id, category);
 
+CREATE TABLE IF NOT EXISTS image_cache (
+    search_key TEXT PRIMARY KEY,
+    image_url  TEXT,
+    cached_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS grocery_items (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -188,6 +194,45 @@ def delete_grocery_item(app, item_id: int, user_id: int) -> bool:
             (item_id, user_id),
         )
     return cur.rowcount > 0
+
+
+def get_deals_needing_images(app) -> list:
+    """Return deals that have no image_url set and have a name to search by."""
+    with _connect(app) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT product_id, category, name, brand FROM deals"
+            " WHERE image_url IS NULL AND name IS NOT NULL"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_deal_image(app, product_id: str, category: str, image_url: str):
+    with _connect(app) as conn:
+        conn.execute(
+            "UPDATE deals SET image_url = ? WHERE product_id = ? AND category = ?",
+            (image_url, product_id, category),
+        )
+
+
+def get_image_cache(app, key: str) -> dict | None:
+    with _connect(app) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT image_url, cached_at FROM image_cache WHERE search_key = ?",
+            (key,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def set_image_cache(app, key: str, image_url: str | None):
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect(app) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO image_cache (search_key, image_url, cached_at)"
+            " VALUES (?, ?, ?)",
+            (key, image_url, now),
+        )
 
 
 def get_deals_for_grocery_list(app, user_id: int, category: str = None) -> list:

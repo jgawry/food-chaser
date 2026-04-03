@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, current_app, Response, g
 
 from ..scraper import WEB_SCRAPERS, LEAFLET_SCRAPERS
 from ..db import save_deals, get_deals, get_categories, get_deals_for_grocery_list
+from ..image_lookup import enqueue_missing
 from ..auth_utils import require_auth
 from ..export import generate_deals_pdf
 from ..email_report import send_deals_email
@@ -32,14 +33,17 @@ def scrape():
     except Exception as e:
         errors.append(f"web: {e}")
 
+    images_dir = current_app.config.get("IMAGES_DIR")
     for store_name, scraper in leaflet_scrapers.items():
         if hasattr(scraper, "scrape_latest"):
             try:
-                all_products.extend(scraper.scrape_latest())
+                all_products.extend(scraper.scrape_latest(images_dir=images_dir))
             except Exception as e:
                 errors.append(f"leaflet ({store_name}): {e}")
 
     saved = save_deals(current_app, all_products, remove_stale=True) if all_products else 0
+    if all_products:
+        enqueue_missing(current_app._get_current_object())
     result = {"scraped": len(all_products), "saved": saved}
     if errors:
         result["warnings"] = errors

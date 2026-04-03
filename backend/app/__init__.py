@@ -17,6 +17,7 @@ def create_app(instance_path=None):
 
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-insecure")
     app.config["APP_BASE_URL"] = os.environ.get("APP_BASE_URL", "http://localhost:5000")
+    app.config["IMAGES_DIR"] = os.path.join(app.instance_path, "images")
 
     limiter.init_app(app)
     init_db(app)

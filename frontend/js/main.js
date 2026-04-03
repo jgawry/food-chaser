@@ -206,13 +206,25 @@ async function init() {
         if (!btn) return;
         btn.addEventListener("click", async () => {
             render(true);
+            let scrapeOk = false;
             try {
                 await triggerScrape();
                 deals = await fetchDeals(currentCategory);
+                scrapeOk = true;
             } catch (err) {
                 alert(`Scrape failed: ${err.message}`);
             }
             render();
+            if (scrapeOk) {
+                // Re-fetch after a delay to pick up images populated by the async lookup
+                setTimeout(async () => {
+                    if (activeTab !== "deals") return;
+                    try {
+                        deals = await fetchDeals(currentCategory);
+                        render();
+                    } catch (_) {}
+                }, 8000);
+            }
         });
     }
 

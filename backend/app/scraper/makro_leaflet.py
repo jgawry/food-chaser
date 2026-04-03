@@ -173,6 +173,54 @@ def download_latest_leaflet():
     return tmp_path
 
 
+# ── PDF image extraction ─────────────────────────────────────────────────────
+
+def _extract_image_blocks(page):
+    """Return list of (fitz.Rect, xref) for meaningful-sized images on the page."""
+    result = []
+    for img in page.get_images():
+        xref, width, height = img[0], img[2], img[3]
+        if width < 60 or height < 60:
+            continue
+        try:
+            for rect in page.get_image_rects(xref):
+                result.append((rect, xref))
+        except Exception:
+            pass
+    return result
+
+
+def _find_product_image(price_rect, image_blocks):
+    """Return the xref of the image above and closest to the given price rect, or None."""
+    best_xref = None
+    best_score = float('inf')
+    price_cx = (price_rect.x0 + price_rect.x1) / 2
+
+    for img_rect, xref in image_blocks:
+        if img_rect.y1 > price_rect.y0 + 5:   # image must sit above the price line
+            continue
+        img_cx = (img_rect.x0 + img_rect.x1) / 2
+        h_dist = abs(img_cx - price_cx)
+        v_dist = price_rect.y0 - img_rect.y1
+        score = h_dist + v_dist * 0.3          # horizontal alignment matters more
+        if score < best_score:
+            best_score = score
+            best_xref = xref
+
+    return best_xref
+
+
+def _save_image(doc, xref, images_dir, product_id):
+    """Extract image by xref, save to images_dir, return /api/images/<filename> URL."""
+    img_info = doc.extract_image(xref)
+    ext = img_info.get("ext", "png")
+    filename = f"{product_id}.{ext}"
+    os.makedirs(images_dir, exist_ok=True)
+    with open(os.path.join(images_dir, filename), "wb") as f:
+        f.write(img_info["image"])
+    return f"/api/images/{filename}"
+
+
 # ── PDF page parser ──────────────────────────────────────────────────────────
 
 def _extract_qty(detail_lines):
@@ -267,9 +315,10 @@ def _dedup(products):
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
-def parse_leaflet(pdf_path, store='Makro'):
+def parse_leaflet(pdf_path, store='Makro', images_dir=None):
     """
     Parse a Makro leaflet PDF and return a list of deal dicts ready for db.save_deals().
+    When images_dir is provided, product images are extracted from the PDF and saved there.
     """
     try:
         doc = fitz.open(pdf_path)
@@ -280,9 +329,20 @@ def parse_leaflet(pdf_path, store='Makro'):
     raw_products = []
     for page_num, page in enumerate(doc, start=1):
         text = page.get_text()
-        for p in _parse_page(text):
+        page_products = _parse_page(text)
+
+        image_blocks = _extract_image_blocks(page) if images_dir else []
+
+        for p in page_products:
             p['page'] = page_num
             p['category'] = 'Gazetka Makro'
+
+            if image_blocks:
+                price_str = f"{p['price']:.2f}".replace('.', ',')
+                hits = page.search_for(f"{price_str} BRUTTO")
+                if hits:
+                    p['_xref'] = _find_product_image(hits[0], image_blocks)
+
             raw_products.append(p)
 
     deduped = _dedup(raw_products)
@@ -291,6 +351,14 @@ def parse_leaflet(pdf_path, store='Makro'):
     deals = []
     for p in deduped:
         product_id = f"leaflet-{_slugify(store)}-{_slugify(p['name'])}-{_slugify(p['qty'])}"
+
+        image_url = None
+        if images_dir and p.get('_xref'):
+            try:
+                image_url = _save_image(doc, p['_xref'], images_dir, product_id)
+            except Exception as e:
+                logger.warning("Image extraction failed for %s: %s", product_id, e)
+
         deals.append({
             'product_id':   product_id,
             'name':         p['name'],
@@ -301,11 +369,12 @@ def parse_leaflet(pdf_path, store='Makro'):
             'old_price':    None,
             'discount_pct': None,
             'promo_label':  None,
-            'image_url':    None,
+            'image_url':    image_url,
             'product_url':  None,
             'source':       'leaflet',
         })
 
+    doc.close()
     return deals
 
 
@@ -315,11 +384,11 @@ class MakroLeafletScraper(LeafletScraper):
     def parse_leaflet(self, pdf_path):
         return parse_leaflet(pdf_path, store=self.store_name)
 
-    def scrape_latest(self):
+    def scrape_latest(self, images_dir=None):
         """Download the current Makro leaflet and parse it."""
         pdf_path = download_latest_leaflet()
         try:
-            return parse_leaflet(pdf_path, store=self.store_name)
+            return parse_leaflet(pdf_path, store=self.store_name, images_dir=images_dir)
         finally:
             try:
                 os.unlink(pdf_path)

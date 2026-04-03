@@ -588,7 +588,7 @@ class LidlLeafletScraper(LeafletScraper):
     def parse_leaflet(self, pdf_path: str) -> list[dict]:
         return parse_leaflet(pdf_path, store=self.store_name)
 
-    def scrape_latest(self) -> list[dict]:
+    def scrape_latest(self, images_dir=None) -> list[dict]:
         """Download the current Lidl leaflet and parse it."""
         pdf_path = download_latest_leaflet()
         try:
