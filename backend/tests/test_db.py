@@ -5,7 +5,7 @@ Uses a real SQLite DB in a pytest tmp_path directory — no mocking needed.
 """
 import pytest
 
-from app.db import save_deals, get_deals, get_categories
+from app.db import save_deals, get_deals, get_categories, upsert_product_images, fill_images_from_db
 
 
 class TestSaveDeals:
@@ -133,3 +133,71 @@ class TestGetCategories:
         save_deals(flask_app, [sample_deal, deal2])
         cats = get_categories(flask_app)
         assert cats.count("Gazetka") == 1
+
+
+class TestProductImageDb:
+    """Tests for the product_images lookup table and image-preservation upsert."""
+
+    WEB_DEAL = {
+        "product_id": "web-001",
+        "name": "Raffaello",
+        "category": "Słodycze",
+        "price": 9.99,
+        "source": "web",
+        "image_url": "https://example.com/raffaello.jpg",
+    }
+    LEAFLET_DEAL = {
+        "product_id": "leaf-001",
+        "name": "Raffaello",
+        "category": "Gazetka",
+        "price": 8.99,
+        "source": "leaflet",
+        "image_url": None,
+    }
+
+    def test_upsert_product_images_stores_entries(self, flask_app):
+        count = upsert_product_images(flask_app, [self.WEB_DEAL])
+        assert count == 1
+
+    def test_upsert_product_images_skips_missing_image(self, flask_app):
+        count = upsert_product_images(flask_app, [self.LEAFLET_DEAL])
+        assert count == 0
+
+    def test_fill_images_from_db_matches_by_name(self, flask_app):
+        upsert_product_images(flask_app, [self.WEB_DEAL])
+        deals = [{**self.LEAFLET_DEAL}]
+        filled = fill_images_from_db(flask_app, deals)
+        assert filled == 1
+        assert deals[0]["image_url"] == self.WEB_DEAL["image_url"]
+
+    def test_fill_images_case_insensitive(self, flask_app):
+        upsert_product_images(flask_app, [{**self.WEB_DEAL, "name": "RAFFAELLO"}])
+        deals = [{**self.LEAFLET_DEAL, "name": "raffaello"}]
+        fill_images_from_db(flask_app, deals)
+        assert deals[0]["image_url"] == self.WEB_DEAL["image_url"]
+
+    def test_fill_images_no_match_leaves_none(self, flask_app):
+        deals = [{**self.LEAFLET_DEAL}]
+        fill_images_from_db(flask_app, deals)
+        assert deals[0]["image_url"] is None
+
+    def test_fill_images_skips_deals_already_having_image(self, flask_app):
+        upsert_product_images(flask_app, [self.WEB_DEAL])
+        deals = [{**self.LEAFLET_DEAL, "image_url": "https://existing.com/img.jpg"}]
+        filled = fill_images_from_db(flask_app, deals)
+        assert filled == 0
+        assert deals[0]["image_url"] == "https://existing.com/img.jpg"
+
+    def test_save_deals_preserves_image_on_re_scrape(self, flask_app):
+        """Re-scraping a leaflet deal must not wipe an image set from the web scraper."""
+        web_deal = {**self.WEB_DEAL}
+        save_deals(flask_app, [web_deal])
+
+        # Simulate re-scraping same product with no image
+        no_image = {**self.WEB_DEAL, "image_url": None, "price": 11.99}
+        save_deals(flask_app, [no_image])
+
+        deals = get_deals(flask_app)
+        assert len(deals) == 1
+        assert deals[0]["image_url"] == self.WEB_DEAL["image_url"]
+        assert deals[0]["price"] == pytest.approx(11.99)

@@ -2,6 +2,7 @@
 Unit tests for Lidl web scraper parsing logic (no network required).
 """
 import json
+import pytest
 
 from app.scraper.lidl import _extract_nuxt_data, _parse_products_from_nuxt
 
@@ -88,6 +89,44 @@ class TestParseProductsFromNuxt:
         result = _parse_products_from_nuxt(nuxt, "Sery i nabiał")
         assert len(result) == 1
         assert result[0]["name"] == "Masło ekstra 82%"
+
+    def test_price_resolved_from_shared_reference(self):
+        """Sale price stored as a shared ref BEFORE the URL must be resolved correctly.
+
+        Reproduces the strawberry bug: oldPrice (17.99) is inline in fwd, but the
+        sale price (6.99) is a deduplicated shared value earlier in the array.
+        The price object {'price': <ref>, 'oldPrice': <ref>, 'displayedCurrency': ...}
+        must be resolved through the full array, not just scanned for raw floats.
+        """
+        nuxt = [None] * 100
+        nuxt[5]  = 6.99   # sale price — early shared reference, outside fwd
+        nuxt[20] = "/p/truskawki/p10033428"  # URL at index 20; fwd = [21..65]
+        nuxt[30] = 17.99  # old price inline, inside fwd
+        nuxt[40] = {      # price info object inside fwd
+            'price': 5, 'oldPrice': 30,
+            'displayedCurrency': 75, 'hasStar': False, 'hasVat': False,
+        }
+        nuxt[41] = '61% taniej'
+        nuxt[22] = 'Truskawki'
+
+        result = _parse_products_from_nuxt(nuxt, "Owoce i warzywa")
+        assert len(result) == 1
+        assert result[0]['price'] == pytest.approx(6.99)
+        assert result[0]['old_price'] == pytest.approx(17.99)
+        assert result[0]['discount_pct'] == 61
+
+    def test_non_discounted_product_price_from_object(self):
+        """Non-discounted product: price object with no oldPrice key."""
+        nuxt = [None] * 80
+        nuxt[5]  = 3.99   # price value — shared ref before URL
+        nuxt[20] = "/p/pieczarki/p10032680"
+        nuxt[35] = {'price': 5, 'displayedCurrency': 75, 'hasStar': False}
+        nuxt[22] = 'Pieczarki'
+
+        result = _parse_products_from_nuxt(nuxt, "Owoce i warzywa")
+        assert len(result) == 1
+        assert result[0]['price'] == pytest.approx(3.99)
+        assert result[0]['old_price'] is None
 
     def test_discount_string_still_rejected_as_name(self):
         """Discount strings like '37% taniej' must still be skipped as names."""

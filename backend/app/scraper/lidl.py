@@ -99,17 +99,41 @@ def _parse_products_from_nuxt(nuxt_array: list, category_label: str) -> list[dic
         # Forward window captures prices; small backward window captures image
         back = nuxt_array[max(0, i - 15):i]
         fwd = nuxt_array[i + 1: min(n, i + 46)]
-        combined = back + [val] + fwd
 
-        # Prices: floats in PLN range within the forward slice only
-        price_floats = sorted(
-            v for v in fwd if isinstance(v, float) and 0.5 < v < 1000
-        )
-        if not price_floats:
-            continue
+        # Prices: the price object {'price': <ref>, 'oldPrice': <ref>, ...} lives in fwd.
+        # Both fields are *reference indices* into the full array — the sale price is often
+        # a shared early reference (outside fwd), so we must resolve via the full array.
+        price = None
+        old_price = None
 
-        price = round(price_floats[0], 2)
-        old_price = round(price_floats[-1], 2) if len(price_floats) >= 2 else None
+        for v in fwd:
+            if isinstance(v, dict) and 'price' in v and 'displayedCurrency' in v:
+                price_ref = v['price']
+                if isinstance(price_ref, int) and 0 <= price_ref < n:
+                    pval = nuxt_array[price_ref]
+                    if isinstance(pval, float) and 0.5 < pval < 1000:
+                        price = round(pval, 2)
+                if 'oldPrice' in v:
+                    old_ref = v['oldPrice']
+                    if isinstance(old_ref, int) and 0 <= old_ref < n:
+                        oval = nuxt_array[old_ref]
+                        if isinstance(oval, float) and 0.5 < oval < 1000:
+                            old_price = round(oval, 2)
+                if price is not None:
+                    break
+
+        # Fallback: scan raw floats for pages whose structure differs
+        if price is None:
+            price_floats = sorted(
+                v for v in fwd if isinstance(v, float) and 0.5 < v < 1000
+            )
+            if not price_floats:
+                continue
+            price = round(price_floats[0], 2)
+            old_price = round(price_floats[-1], 2) if len(price_floats) >= 2 else None
+
+        if old_price == price:
+            old_price = None
 
         # Discount string
         discount_pct = None
