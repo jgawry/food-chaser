@@ -13,7 +13,7 @@ function renderTabs(activeTab) {
 
 // ── Render helpers ────────────────────────────────────────────────
 
-function renderToolbar(loading = false, currentCategory = null) {
+function renderToolbar(loading = false, currentCategory = null, searchQuery = "") {
     const exportUrl = currentCategory
         ? `/api/deals/export/pdf?category=${encodeURIComponent(currentCategory)}`
         : `/api/deals/export/pdf`;
@@ -28,6 +28,8 @@ function renderToolbar(loading = false, currentCategory = null) {
             <button id="email-btn" ${loading ? "disabled" : ""}>
                 Email PDF
             </button>
+            <input id="search-input" type="search" placeholder="Search products…"
+                   value="${searchQuery.replace(/"/g, '&quot;')}" autocomplete="off">
             <div id="category-filter" class="filter-bar"></div>
         </div>
     `;
@@ -69,9 +71,9 @@ function renderCard(deal) {
         : `<div class="deal-card no-link">${inner}</div>`;
 }
 
-function renderGrid(deals) {
+function renderGrid(deals, emptyMessage = `No deals yet — click "Scrape all deals now" to fetch.`) {
     if (!deals.length) {
-        return `<p class="empty">No deals yet — click "Scrape all deals now" to fetch.</p>`;
+        return `<p class="empty">${emptyMessage}</p>`;
     }
     return `<div class="deals-grid">${deals.map(renderCard).join("")}</div>`;
 }
@@ -92,6 +94,10 @@ async function fetchMyListDeals(category = null) {
         : "/deals/my-list";
     const data = await apiFetch(path);
     return data.deals;
+}
+
+async function fetchOptimize() {
+    return apiFetch("/deals/optimize");
 }
 
 async function fetchCategories() {
@@ -125,19 +131,27 @@ async function init() {
 
     let activeTab = "deals";
     let currentCategory = null;
+    let searchQuery = "";
     let deals = [];
     let groceryItems = [];
     let editingGroceryId = null;
-    let myListDeals = null; // null = not loaded, [] = loaded but empty
+    let myListDeals = null;   // null = not loaded, [] = loaded but empty
+    let optimizeResult = null; // null = not shown
 
     try { deals = await fetchDeals(); } catch (_) { /* empty on first run */ }
 
     function render(loading = false) {
         let content;
         if (activeTab === "grocery") {
-            content = renderGroceryView(groceryItems, editingGroceryId, myListDeals);
+            content = renderGroceryView(groceryItems, editingGroceryId, myListDeals, optimizeResult);
         } else {
-            content = renderToolbar(loading, currentCategory) + renderGrid(deals);
+            const visibleDeals = searchQuery
+                ? deals.filter(d => (d.name || "").toLowerCase().includes(searchQuery.toLowerCase()))
+                : deals;
+            const emptyMsg = searchQuery
+                ? `No products match "${searchQuery}".`
+                : `No deals yet — click "Scrape all deals now" to fetch.`;
+            content = renderToolbar(loading, currentCategory, searchQuery) + renderGrid(visibleDeals, emptyMsg);
         }
         app.innerHTML = renderAuthBar(user.email) + renderTabs(activeTab) + content;
         wireAuthBar();
@@ -150,12 +164,18 @@ async function init() {
                 if (myListDeals !== null) {
                     try { myListDeals = await fetchMyListDeals(); } catch (_) {}
                 }
+                if (optimizeResult !== null) {
+                    try { optimizeResult = await fetchOptimize(); } catch (_) {}
+                }
                 render();
             });
             wireMyListDealsButton();
+            wireOptimizeButton();
+            wireAltToggles();
         } else if (!loading) {
             wireScrapeButton();
             wireEmailButton();
+            wireSearchInput();
             renderCategoryFilter();
         }
     }
@@ -168,7 +188,6 @@ async function init() {
                 activeTab = tab;
                 if (tab === "grocery") {
                     try { groceryItems = await fetchGroceryItems(); } catch (_) {}
-                    myListDeals = null;
                 }
                 editingGroceryId = null;
                 render();
@@ -243,6 +262,55 @@ async function init() {
                 }
             }
             render();
+        });
+    }
+
+    function wireOptimizeButton() {
+        const btn = document.getElementById("optimize-btn");
+        if (!btn) return;
+        btn.addEventListener("click", async () => {
+            if (optimizeResult !== null) {
+                optimizeResult = null;
+            } else {
+                try {
+                    optimizeResult = await fetchOptimize();
+                } catch (err) {
+                    alert(`Failed to optimize: ${err.message}`);
+                    return;
+                }
+            }
+            render();
+        });
+    }
+
+    function wireAltToggles() {
+        document.querySelectorAll(".alt-toggle-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const altDiv = btn.nextElementSibling;
+                const hidden = altDiv.classList.toggle("hidden");
+                const count = btn.dataset.count;
+                btn.textContent = hidden
+                    ? `Show ${count} more deal${count > 1 ? "s" : ""}`
+                    : `Hide ${count} alternative${count > 1 ? "s" : ""}`;
+            });
+        });
+    }
+
+    function wireSearchInput() {
+        const input = document.getElementById("search-input");
+        if (!input) return;
+        let timer;
+        input.addEventListener("input", () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                searchQuery = input.value.trim();
+                render();
+                const restored = document.getElementById("search-input");
+                if (restored) {
+                    restored.focus();
+                    restored.setSelectionRange(restored.value.length, restored.value.length);
+                }
+            }, 1000);
         });
     }
 

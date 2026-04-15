@@ -77,6 +77,22 @@ main {
 
 .toolbar-link:hover { background: #f0f0f0; }
 
+/* ── Search input ── */
+#search-input {
+    padding: 0.55rem 0.875rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 200px;
+}
+
+#search-input:focus {
+    border-color: #e63946;
+}
+
 /* ── Category filter ── */
 .filter-bar {
     display: flex;
@@ -537,6 +553,90 @@ main {
     margin-bottom: 1rem;
 }
 
-#mylist-deals-btn {
+.grocery-action-bar {
+    display: flex;
+    gap: 0.75rem;
     margin-top: 1.25rem;
+    flex-wrap: wrap;
+}
+
+/* ── Optimize result ── */
+.optimize-result {
+    margin-top: 1.5rem;
+}
+
+.optimize-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.savings-badge {
+    background: #f0faf5;
+    border: 1px solid #2a9d4e;
+    color: #2a9d4e;
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.optimize-item {
+    margin-bottom: 2rem;
+}
+
+.optimize-item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid #eee;
+}
+
+.optimize-item-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.optimize-item-qty {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+.no-deals-inline {
+    color: #888;
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+.alt-toggle-btn {
+    margin-top: 0.6rem;
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: #555;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.alt-toggle-btn:hover {
+    border-color: #e63946;
+    color: #e63946;
+}
+
+.alt-deals {
+    margin-top: 0.75rem;
+}
+
+.alt-deals.hidden {
+    display: none;
+}
+
+.optimize-btn.active {
+    background: #1a6e35;
+    border-color: #1a6e35;
 }

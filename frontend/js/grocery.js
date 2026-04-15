@@ -57,32 +57,76 @@ function renderGroceryItem(item, editingId) {
     `;
 }
 
-function renderGroceryView(items, editingId, myListDeals) {
+function renderOptimizeResult(result) {
+    const savingsHtml = result.total_savings > 0
+        ? `<span class="savings-badge">Save up to ${result.total_savings.toFixed(2)} zł</span>`
+        : "";
+
+    const itemsHtml = result.items.map(({ grocery_item, best_deal, alternatives }) => {
+        const qty = grocery_item.quantity
+            ? `<span class="optimize-item-qty">${grocery_item.quantity}</span>` : "";
+
+        let dealHtml;
+        if (best_deal) {
+            const altCount = alternatives.length;
+            const altHtml = altCount > 0
+                ? `<button class="alt-toggle-btn" data-count="${altCount}">Show ${altCount} more deal${altCount > 1 ? "s" : ""}</button>
+                   <div class="alt-deals hidden">
+                       <div class="deals-grid">${alternatives.map(renderCard).join("")}</div>
+                   </div>`
+                : "";
+            dealHtml = `<div class="deals-grid">${renderCard(best_deal)}</div>${altHtml}`;
+        } else {
+            dealHtml = `<p class="no-deals-inline">No deals found</p>`;
+        }
+
+        return `
+            <div class="optimize-item">
+                <div class="optimize-item-header">
+                    <span class="optimize-item-name">${grocery_item.name}</span>
+                    ${qty}
+                </div>
+                ${dealHtml}
+            </div>`;
+    }).join("");
+
+    return `
+        <div class="optimize-result">
+            <div class="optimize-summary">
+                <h3 class="mylist-deals-heading">Optimized Shopping</h3>
+                ${savingsHtml}
+            </div>
+            ${itemsHtml}
+        </div>`;
+}
+
+function renderGroceryView(items, editingId, myListDeals, optimizeResult) {
     const listHtml = items.length
         ? `<ul class="grocery-list">${items.map(i => renderGroceryItem(i, editingId)).join("")}</ul>`
         : `<p class="empty">Your grocery list is empty. Add items above.</p>`;
 
     const showingDeals = myListDeals !== null;
-    const btnLabel = showingDeals ? "Hide matching deals" : "Show matching deals";
-    const dealsBtn = items.length
-        ? `<button id="mylist-deals-btn" class="toolbar-btn${showingDeals ? " active" : ""}">${btnLabel}</button>`
-        : "";
+    const showingOptimize = optimizeResult !== null;
+    const dealsBtnLabel = showingDeals ? "Hide matching deals" : "Show matching deals";
+    const optimizeBtnLabel = showingOptimize ? "Hide optimized list" : "Optimize Shopping";
+
+    const buttonsHtml = items.length ? `
+        <div class="grocery-action-bar">
+            <button id="mylist-deals-btn" class="toolbar-btn${showingDeals ? " active" : ""}">${dealsBtnLabel}</button>
+            <button id="optimize-btn" class="toolbar-btn optimize-btn${showingOptimize ? " active" : ""}">${optimizeBtnLabel}</button>
+        </div>` : "";
 
     let dealsHtml = "";
     if (showingDeals) {
-        if (myListDeals.length) {
-            dealsHtml = `
-                <div class="mylist-deals">
-                    <h3 class="mylist-deals-heading">Deals matching your list (${myListDeals.length})</h3>
-                    <div class="deals-grid">${myListDeals.map(renderCard).join("")}</div>
-                </div>`;
-        } else {
-            dealsHtml = `
-                <div class="mylist-deals">
-                    <p class="empty">No current deals match your grocery list.</p>
-                </div>`;
-        }
+        dealsHtml = myListDeals.length
+            ? `<div class="mylist-deals">
+                   <h3 class="mylist-deals-heading">Deals matching your list (${myListDeals.length})</h3>
+                   <div class="deals-grid">${myListDeals.map(renderCard).join("")}</div>
+               </div>`
+            : `<div class="mylist-deals"><p class="empty">No current deals match your grocery list.</p></div>`;
     }
+
+    const optimizeHtml = showingOptimize ? renderOptimizeResult(optimizeResult) : "";
 
     return `
         <div class="grocery-container">
@@ -92,8 +136,9 @@ function renderGroceryView(items, editingId, myListDeals) {
                 <button type="submit">Add</button>
             </form>
             ${listHtml}
-            ${dealsBtn}
+            ${buttonsHtml}
             ${dealsHtml}
+            ${optimizeHtml}
         </div>
     `;
 }

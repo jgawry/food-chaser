@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -42,6 +43,12 @@ CREATE TABLE IF NOT EXISTS image_cache (
     search_key TEXT PRIMARY KEY,
     image_url  TEXT,
     cached_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS product_images (
+    name_key   TEXT PRIMARY KEY,
+    image_url  TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS grocery_items (
@@ -105,10 +112,22 @@ def save_deals(app, deals: list, remove_stale: bool = False) -> int:
     ]
     with _connect(app) as conn:
         conn.executemany(
-            """INSERT OR REPLACE INTO deals
+            """INSERT INTO deals
                (product_id, name, brand, qty, source, category, price,
                 old_price, discount_pct, promo_label, image_url, product_url, scraped_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(product_id, category) DO UPDATE SET
+                 name = excluded.name,
+                 brand = excluded.brand,
+                 qty = excluded.qty,
+                 source = excluded.source,
+                 price = excluded.price,
+                 old_price = excluded.old_price,
+                 discount_pct = excluded.discount_pct,
+                 promo_label = excluded.promo_label,
+                 image_url = COALESCE(excluded.image_url, deals.image_url),
+                 product_url = excluded.product_url,
+                 scraped_at = excluded.scraped_at""",
             rows,
         )
         if remove_stale:
@@ -233,6 +252,103 @@ def set_image_cache(app, key: str, image_url: str | None):
             " VALUES (?, ?, ?)",
             (key, image_url, now),
         )
+
+
+def _normalize_name(name: str) -> str:
+    """Lowercase, strip, collapse whitespace — used as product_images lookup key."""
+    return re.sub(r'\s+', ' ', name.lower().strip())
+
+
+def upsert_product_images(app, deals: list) -> int:
+    """Persist name→image_url mappings from deals that have an image.
+
+    Called after each scrape so web-scraped images accumulate in the DB
+    and can later be matched against leaflet products with the same name.
+    """
+    rows = [
+        (_normalize_name(d["name"]), d["image_url"], datetime.now(timezone.utc).isoformat())
+        for d in deals
+        if d.get("image_url") and d.get("name")
+    ]
+    if not rows:
+        return 0
+    with _connect(app) as conn:
+        conn.executemany(
+            """INSERT INTO product_images (name_key, image_url, updated_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(name_key) DO UPDATE SET
+                 image_url = excluded.image_url,
+                 updated_at = excluded.updated_at""",
+            rows,
+        )
+    return len(rows)
+
+
+def fill_images_from_db(app, deals: list) -> int:
+    """Fill image_url in-place for deals that lack one, using the product_images table.
+
+    Returns the number of deals that were filled.
+    """
+    missing = [d for d in deals if not d.get("image_url") and d.get("name")]
+    if not missing:
+        return 0
+    keys = [_normalize_name(d["name"]) for d in missing]
+    placeholders = ",".join("?" * len(keys))
+    with _connect(app) as conn:
+        rows = conn.execute(
+            f"SELECT name_key, image_url FROM product_images WHERE name_key IN ({placeholders})",
+            keys,
+        ).fetchall()
+    lookup = {r[0]: r[1] for r in rows}
+    filled = 0
+    for deal in missing:
+        url = lookup.get(_normalize_name(deal["name"]))
+        if url:
+            deal["image_url"] = url
+            filled += 1
+    return filled
+
+
+def optimize_grocery_list(app, user_id: int) -> dict:
+    """For each grocery item, return the best deal (lowest price) and alternatives."""
+    with _connect(app) as conn:
+        conn.row_factory = sqlite3.Row
+        items = conn.execute(
+            "SELECT id, name, quantity FROM grocery_items WHERE user_id = ? ORDER BY added_at DESC",
+            (user_id,),
+        ).fetchall()
+
+    if not items:
+        return {"items": [], "total_savings": 0.0}
+
+    result_items = []
+    total_savings = 0.0
+
+    with _connect(app) as conn:
+        conn.row_factory = sqlite3.Row
+        for item in items:
+            rows = conn.execute(
+                "SELECT * FROM deals WHERE LOWER(name) LIKE ? ORDER BY price ASC",
+                (f"%{item['name'].lower()}%",),
+            ).fetchall()
+            deals = [dict(r) for r in rows]
+            best_deal = deals[0] if deals else None
+            alternatives = deals[1:] if len(deals) > 1 else []
+            if best_deal and best_deal.get("old_price"):
+                savings = best_deal["old_price"] - best_deal["price"]
+                if savings > 0:
+                    total_savings += savings
+            result_items.append({
+                "grocery_item": {
+                    "id": item["id"],
+                    "name": item["name"],
+                    "quantity": item["quantity"],
+                },
+                "best_deal": best_deal,
+                "alternatives": alternatives,
+            })
+
+    return {"items": result_items, "total_savings": round(total_savings, 2)}
 
 
 def get_deals_for_grocery_list(app, user_id: int, category: str = None) -> list:

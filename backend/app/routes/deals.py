@@ -3,7 +3,7 @@ import os
 from flask import Blueprint, jsonify, request, current_app, Response, g
 
 from ..scraper import WEB_SCRAPERS, LEAFLET_SCRAPERS
-from ..db import save_deals, get_deals, get_categories, get_deals_for_grocery_list
+from ..db import save_deals, get_deals, get_categories, get_deals_for_grocery_list, optimize_grocery_list, upsert_product_images, fill_images_from_db
 from ..image_lookup import enqueue_missing
 from ..auth_utils import require_auth
 from ..export import generate_deals_pdf
@@ -41,6 +41,10 @@ def scrape():
             except Exception as e:
                 errors.append(f"leaflet ({store_name}): {e}")
 
+    if all_products:
+        app = current_app._get_current_object()
+        upsert_product_images(app, all_products)
+        fill_images_from_db(app, all_products)
     saved = save_deals(current_app, all_products, remove_stale=True) if all_products else 0
     if all_products:
         enqueue_missing(current_app._get_current_object())
@@ -92,6 +96,14 @@ def deals_for_my_list():
     category = request.args.get("category")
     deals = get_deals_for_grocery_list(current_app, g.current_user_id, category or None)
     return jsonify({"deals": deals, "count": len(deals)})
+
+
+@deals_bp.route("/api/deals/optimize", methods=["GET"])
+@require_auth
+def optimize_shopping():
+    """Return the best deal per grocery list item, sorted by price, with alternatives."""
+    result = optimize_grocery_list(current_app, g.current_user_id)
+    return jsonify(result)
 
 
 @deals_bp.route("/api/deals/export/pdf", methods=["GET"])
